@@ -1,49 +1,97 @@
-import React, { useState, useEffect } from 'react';
-import logo from './logo.svg';
-import './App.css';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import './styles/theme.css';
+import './styles/app.css';
+import TodoInput from './components/TodoInput';
+import TodoItem from './components/TodoItem';
+import Filters from './components/Filters';
+import { loadTodos, saveTodos } from './lib/storage';
 
 // PUBLIC_INTERFACE
-function App() {
-  const [theme, setTheme] = useState('light');
+export default function App() {
+  /** Main Todo App with add/edit/delete/complete, filters and persistence. */
+  const [todos, setTodos] = useState(() => loadTodos());
+  const [filter, setFilter] = useState('all');
 
-  // Effect to apply theme to document element
+  // Persist on change
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+    saveTodos(todos);
+  }, [todos]);
 
-  // PUBLIC_INTERFACE
-  const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
-  };
+  // Handlers
+  const addTodo = useCallback((text) => {
+    const newTodo = {
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+      text,
+      completed: false
+    };
+    setTodos((prev) => [newTodo, ...prev]);
+  }, []);
+
+  const toggleTodo = useCallback((id) => {
+    setTodos((prev) =>
+      prev.map(t => (t.id === id ? { ...t, completed: !t.completed } : t))
+    );
+  }, []);
+
+  const deleteTodo = useCallback((id) => {
+    setTodos((prev) => prev.filter(t => t.id !== id));
+  }, []);
+
+  const updateTodo = useCallback((id, text) => {
+    setTodos((prev) => prev.map(t => (t.id === id ? { ...t, text } : t)));
+  }, []);
+
+  const clearCompleted = useCallback(() => {
+    setTodos((prev) => prev.filter(t => !t.completed));
+  }, []);
+
+  const filteredTodos = useMemo(() => {
+    switch (filter) {
+      case 'active':
+        return todos.filter(t => !t.completed);
+      case 'completed':
+        return todos.filter(t => t.completed);
+      default:
+        return todos;
+    }
+  }, [todos, filter]);
+
+  const remaining = useMemo(() => todos.filter(t => !t.completed).length, [todos]);
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <button 
-          className="theme-toggle" 
-          onClick={toggleTheme}
-          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-        >
-          {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
-        </button>
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <p>
-          Current theme: <strong>{theme}</strong>
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div className="container app-shell">
+      <div className="card" role="application" aria-label="Todo application">
+        <header className="header">
+          <h1 className="title">Ocean Todos</h1>
+          <p className="subtitle">A clean, modern list to organize your day</p>
+        </header>
+
+        <TodoInput onAdd={addTodo} />
+
+        <ul className="todo-list" role="list" aria-label="Todo list">
+          {filteredTodos.length === 0 && (
+            <div className="empty" role="status" aria-live="polite">
+              No todos here yet. Add one above!
+            </div>
+          )}
+          {filteredTodos.map(todo => (
+            <TodoItem
+              key={todo.id}
+              todo={todo}
+              onToggle={toggleTodo}
+              onDelete={deleteTodo}
+              onUpdate={updateTodo}
+            />
+          ))}
+        </ul>
+
+        <Filters
+          activeFilter={filter}
+          onChange={setFilter}
+          onClearCompleted={clearCompleted}
+          remaining={remaining}
+        />
+      </div>
     </div>
   );
 }
-
-export default App;
